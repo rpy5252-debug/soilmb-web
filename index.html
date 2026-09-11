@@ -113,9 +113,9 @@
   </div>
 
 <script>
+
 const SUPABASE_URL = "https://irkbuqavzfajrpuolzid.supabase.co";
 const SUPABASE_KEY = "sb_publishable_dnYAoZd4RFDbWnntZbryAw_IbZOZwIk";
-
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function sendOTP() {
@@ -129,12 +129,19 @@ async function sendOTP() {
 
   msg.textContent = "Sending OTP...";
 
-  const { error } = await sb.auth.signInWithOtp({ email });
+  try {
+    const { error } = await sb.auth.signInWithOtp({
+      email: email
+    });
 
-  if (error) {
-    msg.textContent = "OTP Error: " + error.message;
-  } else {
+    if (error) {
+      msg.textContent = "OTP Error: " + error.message;
+      return;
+    }
+
     msg.textContent = "OTP sent. Please check your email.";
+  } catch (error) {
+    msg.textContent = "OTP Error: " + error.message;
   }
 }
 
@@ -150,58 +157,80 @@ async function verifyOTP() {
 
   msg.textContent = "Verifying...";
 
-  const { data, error } = await sb.auth.verifyOtp({
-    email: email,
-    token: token,
-    type: "email"
-  });
+  try {
+    const { data, error } = await sb.auth.verifyOtp({
+      email: email,
+      token: token,
+      type: "email"
+    });
 
-  if (error) {
-    msg.textContent = "Verification failed: " + error.message;
-  
-    } else {
-  const accessToken = data.session?.access_token;
+    if (error) {
+      msg.textContent = "Verification failed: " + error.message;
+      return;
+    }
 
-  if (!accessToken) {
-    msg.textContent = "Login successful, but session token not found.";
-    return;
-  }
+    const accessToken = data.session?.access_token;
 
-  sessionStorage.setItem("soilmb_access_token", accessToken);
+    if (!accessToken) {
+      msg.textContent = "Login successful, but session token not found.";
+      return;
+    }
 
-  msg.textContent = "✅ Login successful - Secure session active";
+    sessionStorage.setItem("soilmb_access_token", accessToken);
+
     const license = await checkLicense();
 
-if (license.active) {
-  msg.textContent =
-    `✅ Login successful | Plan: ${license.planCode} | Valid till: ${new Date(license.expiresAt).toLocaleDateString()}`;
-} else {
-  msg.textContent = "✅ Login successful | कोई Active Subscription नहीं है";
-}
-}
-  
+    if (license.active) {
+      msg.textContent =
+        `✅ Login successful | Plan: ${license.planCode} | Valid till: ${new Date(license.expiresAt).toLocaleDateString()}`;
+    } else {
+      msg.textContent =
+        "✅ Login successful | कोई Active Subscription नहीं है";
+    }
+
+  } catch (error) {
+    msg.textContent = "Verification error: " + error.message;
+  }
 }
 
 async function checkLicense() {
   const token = sessionStorage.getItem("soilmb_access_token");
 
   if (!token) {
-    return { active: false, error: "LOGIN_REQUIRED" };
+    return {
+      active: false,
+      error: "LOGIN_REQUIRED"
+    };
   }
 
-  const response = await fetch(
-    "https://soilmb-backend.onrender.com/api/license/status",
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
+  try {
+    const response = await fetch(
+      "https://soilmb-backend.onrender.com/api/license/status",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      return {
+        active: false,
+        error: result.error || "LICENSE_CHECK_FAILED"
+      };
     }
-  );
 
-  const result = await response.json();
+    return result;
 
-  console.log("License status:", result);
-  return result;
+  } catch (error) {
+    return {
+      active: false,
+      error: "BACKEND_CONNECTION_FAILED"
+    };
+  }
 }
 </script>
 </body>
