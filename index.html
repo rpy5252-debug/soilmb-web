@@ -86,7 +86,11 @@
     Verify OTP
   </button>
 
-  <p id="otpMessage"></p>
+  <button onclick="startTestPayment()"
+  style="width:100%;padding:12px;margin:8px 0;">
+  Buy 1 Month - ₹699
+</button>
+    <p id="otpMessage"></p>
 </div>
 
   <div class="card">
@@ -232,6 +236,136 @@ async function checkLicense() {
     };
   }
 }
+async function createPaymentOrder(planCode) {
+  const token = sessionStorage.getItem("soilmb_access_token");
+  const msg = document.getElementById("otpMessage");
+
+  if (!token) {
+    msg.textContent = "पहले OTP से Login करें।";
+    return null;
+  }
+
+  try {
+    msg.textContent = "Creating secure payment order...";
+
+    const response = await fetch(
+      "https://soilmb-backend.onrender.com/api/payment/create-order",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          planCode: planCode
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      msg.textContent =
+        "Payment order error: " + (result.error || response.status);
+      return null;
+    }
+
+    msg.textContent = "✅ Secure payment order created";
+    return result;
+
+  } catch (error) {
+    msg.textContent = "Payment connection error: " + error.message;
+    return null;
+  }
+}
+async function startTestPayment() {
+  const msg = document.getElementById("otpMessage");
+
+  const order = await createPaymentOrder("1M");
+
+  if (!order) {
+    return;
+  }
+
+  const options = {
+    key: order.keyId,
+    amount: order.amount,
+    currency: order.currency,
+    order_id: order.orderId,
+    name: "Soil MB Calculator",
+    description: "1 Month Subscription",
+
+    handler: async function (response) {
+      msg.textContent = "Payment successful. Verifying...";
+
+      await verifyPayment(response);
+    },
+
+    theme: {
+      color: "#3399cc"
+    }
+  };
+
+  const rzp = new Razorpay(options);
+
+  rzp.on("payment.failed", function () {
+    msg.textContent = "Payment failed. Please try again.";
+  });
+
+  rzp.open();
+}
+async function verifyPayment(paymentResponse) {
+  const token = sessionStorage.getItem("soilmb_access_token");
+  const msg = document.getElementById("otpMessage");
+
+  if (!token) {
+    msg.textContent = "Login session नहीं मिला। दोबारा Login करें।";
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      "https://soilmb-backend.onrender.com/api/payment/verify",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_signature: paymentResponse.razorpay_signature
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.verified) {
+      msg.textContent = "Payment verification failed.";
+      return;
+    }
+
+    msg.textContent = "✅ Payment verified. Subscription activate हो रही है...";
+
+    setTimeout(async () => {
+      const license = await checkLicense();
+
+      if (license.active) {
+        msg.textContent =
+          `✅ Subscription Active | Plan: ${license.planCode} | Valid till: ${new Date(license.expiresAt).toLocaleDateString()}`;
+      } else {
+        msg.textContent =
+          "✅ Payment verified. Subscription activation process में है।";
+      }
+    }, 3000);
+
+  } catch (error) {
+    msg.textContent = "Verification error: " + error.message;
+  }
+}
 </script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </body>
 </html>
