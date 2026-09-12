@@ -86,9 +86,24 @@
     Verify OTP
   </button>
 
-  <button onclick="startTestPayment()"
-  style="width:100%;padding:12px;margin:8px 0;">
+  <button onclick="startPlanPayment('1M')"
+  style="width:100%;padding:12px;margin:6px 0;">
   Buy 1 Month - ₹699
+</button>
+
+<button onclick="startPlanPayment('3M')"
+  style="width:100%;padding:12px;margin:6px 0;">
+  Buy 3 Months - ₹1,999
+</button>
+
+<button onclick="startPlanPayment('6M')"
+  style="width:100%;padding:12px;margin:6px 0;">
+  Buy 6 Months - ₹3,999
+</button>
+
+<button onclick="startPlanPayment('12M')"
+  style="width:100%;padding:12px;margin:6px 0;">
+  Buy 12 Months - ₹7,999
 </button>
     <p id="otpMessage"></p>
 </div>
@@ -278,14 +293,21 @@ async function createPaymentOrder(planCode) {
     return null;
   }
 }
-async function startTestPayment() {
+async function startPlanPayment(planCode) {
   const msg = document.getElementById("otpMessage");
 
-  const order = await createPaymentOrder("1M");
+  const order = await createPaymentOrder(planCode);
 
   if (!order) {
     return;
   }
+
+  const planNames = {
+    "1M": "1 Month Subscription",
+    "3M": "3 Months Subscription",
+    "6M": "6 Months Subscription",
+    "12M": "12 Months Subscription"
+  };
 
   const options = {
     key: order.keyId,
@@ -293,16 +315,11 @@ async function startTestPayment() {
     currency: order.currency,
     order_id: order.orderId,
     name: "Soil MB Calculator",
-    description: "1 Month Subscription",
+    description: planNames[planCode] || "Subscription",
 
     handler: async function (response) {
       msg.textContent = "Payment successful. Verifying...";
-
       await verifyPayment(response);
-    },
-
-    theme: {
-      color: "#3399cc"
     }
   };
 
